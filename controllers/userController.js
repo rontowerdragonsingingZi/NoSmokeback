@@ -118,38 +118,17 @@ class UserController {
    */
   static async uploadAvatar(ctx) {
     try {
-      // 使用multer中間件處理文件上傳
-      await new Promise((resolve, reject) => {
-        const uploadSingle = upload.single('file');
-        uploadSingle(ctx.req, ctx.res, (err) => {
-          if (err) {
-            if (err.code === 'LIMIT_FILE_SIZE') {
-              const error = new Error('文件大小超限');
-              error.code = 3005;
-              reject(error);
-            } else if (err.message === '不支持的文件格式') {
-              const error = new Error('文件格式不支持');
-              error.code = 3004;
-              reject(error);
-            } else {
-              const error = new Error('文件上傳失敗');
-              error.code = 5002;
-              reject(error);
-            }
-          } else {
-            resolve();
-          }
-        });
-      });
+      // 使用multer中間件處理文件上傳（Koa方式）
+      await upload.single('file')(ctx, async () => {});
       
-      if (!ctx.req.file) {
+      if (!ctx.file) {
         const error = new Error('請選擇要上傳的文件');
         error.code = 3001;
         throw error;
       }
       
       const userId = ctx.state.user.id;
-      const filename = ctx.req.file.filename;
+      const filename = ctx.file.filename;
       const avatarUrl = `/uploads/${filename}`;
       
       // 更新用戶頭像
@@ -165,13 +144,25 @@ class UserController {
       
     } catch (error) {
       // 如果上傳失敗，刪除已上傳的文件
-      if (ctx.req.file) {
+      if (ctx.file) {
         try {
-          await fs.unlink(ctx.req.file.path);
+          await fs.unlink(ctx.file.path);
         } catch (unlinkError) {
           console.error('刪除文件失敗:', unlinkError);
         }
       }
+      
+      // 處理multer錯誤
+      if (error.code === 'LIMIT_FILE_SIZE') {
+        const err = new Error('文件大小超限');
+        err.code = 3005;
+        throw err;
+      } else if (error.message === '不支持的文件格式') {
+        const err = new Error('文件格式不支持');
+        err.code = 3004;
+        throw err;
+      }
+      
       throw error;
     }
   }

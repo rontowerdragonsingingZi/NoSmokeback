@@ -34,7 +34,15 @@ app.use(errorHandler);
 // 請求日誌中間件
 app.use(requestLogger);
 
-// 響應格式化中間件
+// 靜態文件服務 - 優先處理靜態文件請求，不經過格式化
+// 注意：koa-static 會將指定目錄的內容暴露在根路由上
+// 若要訪問 /uploads/filename.png，需要這樣配置：
+app.use(serve(path.join(__dirname), {
+  defer: false, // 不延遲處理，立即處理靜態文件請求
+  maxage: 86400000 // 設置緩存，提高性能
+}));
+
+// 響應格式化中間件 - 放在靜態文件處理之後，只處理API響應
 app.use(responseFormatter);
 
 // CORS 跨域 - 手動設置
@@ -53,11 +61,15 @@ app.use(async (ctx, next) => {
   await next();
 });
 
-// 解析請求體
+// 解析請求體 - 排除文件上傳路徑
 app.use(bodyparser({
   enableTypes: ['json', 'form'],
   jsonLimit: '10mb',
-  formLimit: '10mb'
+  formLimit: '10mb',
+  // 排除文件上傳路徑，讓multer處理
+  ignore: (ctx) => {
+    return ctx.path === '/v1/user/upload-avatar';
+  }
 }));
 
 // 路由 - 必須在靜態文件中間件之前
@@ -69,8 +81,8 @@ app.use(healthRoutes.routes()).use(healthRoutes.allowedMethods());
 app.use(achievementsRoutes.routes()).use(achievementsRoutes.allowedMethods());
 app.use(systemRoutes.routes()).use(systemRoutes.allowedMethods());
 
-// 靜態文件服務 - 放在最後，避免攔截API請求
-app.use(serve(path.join(__dirname, 'uploads')));
+// 此處已移除重複的靜態文件服務聲明
+// 靜態文件服務已移至中間件順序的前面，在responseFormatter之前
 
 // 啟動服務
 const PORT = config.port || 3000;
